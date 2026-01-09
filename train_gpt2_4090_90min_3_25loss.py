@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import math
 import time
 import uuid
 from dataclasses import dataclass
@@ -359,7 +360,7 @@ class AsyncDataLoader:
     def preload(self):
         try:
             input_cpu, target_cpu = self.loader.next_batch()
-        except:
+        except Exception as e:
             # Handle end of epoch or errors if necessary
             self.next_input = None
             self.next_target = None
@@ -460,7 +461,7 @@ for step in range(args.num_iterations + 1):
 
     # Gradient Scaling & stepping
     for p in model.parameters():
-        if p.grad is not None:
+        if p.grad is not None: 
             p.grad /= args.batch_size
 
     # Muon momentum schedule
