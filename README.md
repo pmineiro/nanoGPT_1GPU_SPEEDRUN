@@ -10,15 +10,15 @@ Malbo is a lower bound objective I originally developed for RL mid-training, but
 
 ## Details
 
-* [Write up](malbo.pdf) of the equations, somewhat brief.  There's another larger paper eventually coming.
+* [Write up](malbo.pdf) of the equations, somewhat brief.
 * The implementation of the loss is mostly in [malbo.py](malbo.py), along with the [modification of the training loop](https://github.com/pmineiro/nanoGPT_1GPU_SPEEDRUN/blob/ba367c9178a66ce53c31609809c1931c5dff6b76/train_gpt2_4090_90min_3_25loss.py#L289).
   * You can `git diff main train_gpt2_4090_90min_3_25loss.py` on the `malbo` branch to see all the differences.
   * In particular, there are no hyperparameters changes.  I just changed the loss and hit the button.
   
-| What | Notes | Perplexity @ 100 | Perplexity @ 1000 | Perplexity @ 1750 |
-|--------|------|------|-----|-----|
-| baseline | `main` branch run | 5.344 | 3.438 | 3.281 | 
-| malbo | `malbo` branch run | 4.812 | 3.297 | 3.234 |
+| What | Notes | Perplexity @ 100 | Perplexity @ 1000 | Perplexity @ 1750 | complete output |
+|--------|------|------|-----|-----|-----|
+| baseline | `main` branch run | 5.344 | 3.438 | 3.281 | [baseline.out](baseline.out) |
+| malbo | `malbo` branch run | 4.812 | 3.297 | 3.234 | [malbo.out](malbo.out) |
 
 Original README.md is below
 --------------------------------
