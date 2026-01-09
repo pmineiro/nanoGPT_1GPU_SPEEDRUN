@@ -1,7 +1,6 @@
 import os
 import sys
 import glob
-import math
 import time
 import uuid
 from dataclasses import dataclass
@@ -9,7 +8,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
-import torch.distributed as dist
+
+from malbo import compute_malbo_parameters
 
 # -----------------------------------------------------------------------------
 # 1. Environment & Performance Setup
@@ -285,7 +285,17 @@ class GPT(nn.Module):
         
         # Scaled tanh logits optimization (prevents instabilities)
         logits = 30 * torch.tanh(self.lm_head(norm(x)) / 30)
-        return F.cross_entropy(logits.view(-1, logits.size(-1)).bfloat16(), target.view(-1))
+
+        ce_per_token = F.cross_entropy(logits.view(-1, logits.size(-1)).bfloat16(), target.view(-1), reduction='none').view(logits.size(0), logits.size(1))
+
+        with torch.no_grad():
+            vhat, kappa, gamma = compute_malbo_parameters(logits, target)
+            weights = kappa * gamma
+
+        actual_loss = ce_per_token.mean()
+        malbo_loss = (weights * ce_per_token).sum(dim=1).mean()
+
+        return actual_loss, malbo_loss # note: report actual_loss, but take backward of malbo_loss
 
 # -----------------------------------------------------------------------------
 # 4. Data Loading (Async)
@@ -349,7 +359,7 @@ class AsyncDataLoader:
     def preload(self):
         try:
             input_cpu, target_cpu = self.loader.next_batch()
-        except Exception as e:
+        except:
             # Handle end of epoch or errors if necessary
             self.next_input = None
             self.next_target = None
@@ -427,7 +437,7 @@ x, y = train_loader.next_batch()
 t0 = time.time()
 run_id = str(uuid.uuid4())
 print(f"Run ID: {run_id}")
-print("Step\tLoss\tTime(ms)\tkt/s\tWindow\tETA(m)")
+print("Step\tLoss\tTime(ms)\tkt/s\tWindow\tETA(m)\tMalbo Loss")
 
 for step in range(args.num_iterations + 1):
     # Dynamic Window Schedule
@@ -438,18 +448,19 @@ for step in range(args.num_iterations + 1):
     
     # Gradient Accumulation Loop
     for i in range(args.batch_size):
-        loss = model(x, y, attn_blocksize)
-        
+        actual_loss, malbo_loss = model(x, y, attn_blocksize)
+
         # Async fetch next batch while backward pass runs
-        x, y = train_loader.next_batch() 
-        
-        loss.backward()
+        x, y = train_loader.next_batch()
+
+        malbo_loss.backward()
         if i == args.batch_size - 1:
-            train_loss = loss.detach()
+            train_loss = actual_loss.detach()
+            train_malbo_loss = malbo_loss.detach()
 
     # Gradient Scaling & stepping
     for p in model.parameters():
-        if p.grad is not None: 
+        if p.grad is not None:
             p.grad /= args.batch_size
 
     # Muon momentum schedule
@@ -466,8 +477,8 @@ for step in range(args.num_iterations + 1):
     dt = 1000 * (time.time() - t0)
     kt_s = (args.batch_size * args.sequence_length) / dt
     eta = ((args.num_iterations - step) * dt) / 1000 / 60
-    
-    print(f"{step+1}\t{train_loss.item():.3f}\t{dt:.0f}\t{kt_s:.1f}\t{int(window)}\t{eta:.1f}")
+
+    print(f"{step+1}\t{train_loss.item():.3f}\t{dt:8.0f}\t{kt_s:.1f}\t{int(window)}\t{eta:.1f}\t{train_malbo_loss.item():.3f}")
     t0 = time.time()
     
     if step == args.num_iterations: 
