@@ -37,7 +37,7 @@ def compute_malbo_parameters(logits, targets, eps=1e-3, alpha=0.05, dtype=torch.
     elif dtype == torch.float32:
         n_iters = 20
     else:
-        n_iters = 16
+        n_iters = 16 # note: bfloat16 numerically unstable, don't do this
 
     # 3. Nested Bisection
     # Outer loop finds v, inner loop finds optimal bet b* for that v
@@ -84,11 +84,8 @@ if __name__ == "__main__":
 
     eps = 1e-3
     alpha = 0.05
-    # <gemini>
-    # write this section for me
     logits = 4 * torch.randn(B, T, K, device=device, dtype=torch.float32)
     targets = torch.randint(0, K, (B, T), device=device)
-    # </gemini>
 
     vhat, kappa, gamma = compute_malbo_parameters(logits, targets, alpha=alpha, eps=eps)
     vhat_numpy = vhat.float().cpu().numpy()
