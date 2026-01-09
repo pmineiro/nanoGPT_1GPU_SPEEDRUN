@@ -1,0 +1,10 @@
+*.swp
+malbo.aux
+malbo.bbl
+malbo.bcf
+malbo.blg
+malbo.fdb_latexmk
+malbo.fls
+malbo.log
+malbo.run.xml
+__pycache__

@@ -1,0 +1,175 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{cleveref}
+
+\usepackage[
+  backend=biber,
+  style=authoryear, % or numeric
+  maxcitenames=1,
+  mincitenames=1,
+]{biblatex}
+\addbibresource{references.bib}
+
+\title{malbo for the speedrun}
+\author{pmineiro}
+\date{December 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Idea}
+
+Optimize a lower bound on the cross entropy loss to improve learning.  
+
+\subsection{Derivation} 
+Generate an adapted sequence of probability vectors $p_t$ and then observe token $n_t$ and receive
+reward $\log(p_{n_t})$. This reward is bounded above by zero and has no lower bound,
+which is problematic since we want to optimize a lower bound.  Instead derive an
+influence function by pretending to do an $\epsilon$ mix-in of the uniform distribution
+over  $k$ tokens, $p = \epsilon / k + (1 - \epsilon) \pi$, with $\pi > 0$.
+\begin{align*}
+\log\left(p_{n_t}\right) &= \log\left( \frac{\epsilon}{k} + \left(1 - \epsilon \right) \pi_{n_t} \right) \\
+&= \log\left(1 + k \frac{1 - \epsilon}{\epsilon} \pi_{n_t}\right) + \log\left(\frac{\epsilon}{k}\right).
+\end{align*}
+Shifting off $\log(\epsilon/k)$ gives the lower and upper bounded reward $r_t = \log(1
++ c \pi_{n_t})$ where $c = k (1 - \epsilon) / \epsilon$.  We can use this to make a
+betting process
+\begin{align}
+K_T(v, \pi, b) &= \prod_{t \leq T} 1 + b_t \left(\frac{\log(1 + c \pi_{n_t})}{v} - 1\right) \label{eqn:bettingcs}
+\end{align}
+which is a martingale when evaluated at $v = \mathbb{E}\left[\log(1 + c \pi_n)\right]$ and any
+adapted betting sequence $b \in [0, 1)^T$.  Note an independent betting process is run for each 
+sequence in the batch and $t$ indexes token positions.
+
+Using a universal portfolio betting scheme (see \cref{app:universal}) yields lower bound
+\begin{align}
+\hat{v}(\theta) = \max_{\substack{v > 0 \\ b \in [0, 1]}} v \quad \text{s.t.} \quad \log K_T(v, \theta, b \vec{1}) \geq \log\left(\frac{1+T}{\alpha}\right) \label{eqn:vhat}
+\end{align}
+valid with probability at least $(1 - \alpha)$.  As derived in \cref{app:gradvhat},
+\begin{align}
+\nabla_\theta \hat{v}(\theta) &= \sum_{t \leq T} \left(\frac{\kappa_t}{\sum_{t' \leq T} \kappa_{t'}}\right) \gamma_t \nabla_\theta \log \pi\left(y_t|y_{<t},x;\theta\right),
+ \label{eqn:gradvhat} \\
+\kappa_t &\doteq \frac{b^*(\hat{v}(\theta), \theta)}{\hat{v}(\theta) + b^*(\hat{v}(\theta), \theta) \left(r_t(\theta) - \hat{v}(\theta) \right)} > 0, \label{eqn:kappa} \\
+\gamma_t &\doteq \frac{c \pi\left(y_s|y_{<s},x;\theta\right)}{1 + c \pi\left(y_s|y_{<s},x;\theta\right)} \in [0, 1].
+\end{align}
+This looks like a weighted version of the standard cross-entropy loss.  Note $\kappa_t \gamma_t$ is decreasing in $\pi$ so this emphasizes rare tokens.
+
+\appendix
+
+\crefalias{section}{appendix}
+\crefname{appendix}{appendix}{appendices}
+\Crefname{appendix}{Appendix}{Appendices}
+
+\section{Universal Portfolio Strategy} \label{app:universal}
+
+\Cref{eqn:bettingcs} corresponds to the returns of a
+portfolio over two assets: a $(1 - b_t)$ allocation to cash, which returns 1;
+and a $b_t$ allocation to a stock which returns $v^{-1} \log(1 + c \pi(y_t|y_{<t},x;\theta))$.
+A universal portfolio~\parencite{cover1991universal} betting strategy is given by
+\begin{align*}
+\hat{b}_t(v, \theta) &= \frac{\int_0^1 z K_{t-1}(v, \theta, z \vec{1}) dz}{\int_0^1 K_{t-1}(v, \theta, z \vec{1}) dz},
+\end{align*}
+where $z$ is a scalar and we evaluate $K_{t-1}(v, \theta, z \vec{1})$ at
+the fixed constant bet $z$. This satisfies the conditions of Theorem 10.3 of
+\textcite{cesa2006prediction}, therefore
+\begin{align*}
+\log K_T\left(v, \theta, \hat{b}(v, \theta)\right) &\geq \log K_T\left(v, \theta, b^* \vec{1}\right) - \log(1 + T),
+\end{align*}
+where $b^*$ is any fixed bet in hindsight. Combining this Ville's inequality yields yields \cref{eqn:vhat}.
+
+\section{Solving \cref{eqn:vhat}}
+
+\subsection{\cref{eqn:vhat} defines a convex feasibility region} \label{app:setinterval}
+
+Consider $v_1 < v_2$, then
+\begin{align*}
+\log K_t\left(v_2, \theta, b^*(v_2, \theta)\right) &\leq \log K_t\left(v_1, \theta, b^*(v_2, \theta)\right) & \left( \text{decreasing in $v$} \right) \\
+&\leq \log K_t\left(v_1, \theta, b^*(v_1, \theta)\right) & \left( \text{optimality of $b^*$} \right)
+\end{align*}
+therefore the feasibility set is either $\emptyset$ or $(0, v^*]$ for some $v^* > 0$.
+
+\subsection{\cref{eqn:vhat} defines a non-empty feasible region} \label{app:setnonempty}
+
+Let $r_s(\theta) \doteq \log(1 + c \pi(y_s|y_{<s},x;\theta))$.  By assumption $\pi > 0$ ergo $r_s(\theta) > 0$.  Let $s'$ denote the largest $r_s(\theta)$.  For $T v < r_{s'}(\theta)$, lower bound the martingale wealth by
+\begin{align*}
+\log K_t\left(v, \theta, b \vec{1}\right) &\geq \log\left(1 + b \left( \frac{r_{s'}(\theta)}{v} - 1 \right) \right) + (T - 1) \log\left(1 - b\right) \\
+&\geq \log\left( \frac{ r_{s'}(\theta) } {T v} \right) + \left(T - 1\right) \log\left( \frac{ (T - 1) r_{s'}(\theta) } { T (r_{s'}(\theta) - v) } \right) & \left(\dagger\right) \\
+&\geq \log\left( \frac{ r_{s'}(\theta) } {T v} \right) + \left(T - 1\right) \log\left(\frac{T - 1}{T}\right) \\
+&\geq \log\left( \frac{ r_{s'}(\theta) } {T v} e^{-1} \right)
+\end{align*}
+where $(\dagger)$ follows from choosing $b = \frac{r_s(\theta) - T v}{T (r_s(\theta) - v)} \in \left[0, \frac{1}{T}\right]$.  Equating this bound with the threshold yields a lower bound
+\begin{align*}
+\hat{v}(\theta) &\geq \frac{\alpha e^{-1}}{T (1 + T)} r_{s'}(\theta)
+\end{align*}
+with corresponding bet $b > (T + 1)^{-1}$.
+
+\subsection{Empirical mean is not a lower bound} \label{app:setupperbound}
+Let $r_s(\theta) \doteq \log(1 + c \pi(y_s|y_{<s},x;\theta))$.  By assumption $\pi > 0$ ergo $r_s(\theta) > 0$.  From Jensen's inequality, for a constant bet $b$,
+\begin{align*}
+\frac{1}{t} \log K_t\left(v, \theta, b \vec{1}\right) &= \frac{1}{t} \sum_{s \leq t} \log\left(1 + b \left( \frac{r_s(\theta)}{v} - 1 \right) \right) \\
+&\leq \log \left( 1 + \frac{1}{t} \sum_{s \leq t} b \left( \frac{r_s(\theta)}{v} - 1 \right) \right) \\
+&= \log \left( 1 - b + b  \frac{t^{-1} \sum_{s \leq t} r_s(\theta)}{v} \right) \\
+&= 0, & \left(\dagger\right)
+\end{align*}
+where $(\dagger)$ is from evaluating at $v = t^{-1} \sum_{s \leq t} r_s(\theta)$. This is standard result in portfolio theory about the optimality of an all cash portfolio, see section 15.2 of \textcite{cover1999elements}.
+
+\subsection{Computing $\hat{v}(\theta)$} \label{app:vhat}
+
+Let $r_s(\theta) \doteq \log(1 + c \pi(y_s|y_{<s},x;\theta))$. 
+Because $(\alpha e^{-1} / (T (1 + T))) \max_s r_s(\theta) < \hat{v}(\theta) < t^{-1} \sum_{s \leq t} r_s(\theta)$, we can efficiently compute $\hat{v}(\theta)$ via Brent's method~\parencite{brent1973}, root-finding on the function
+\begin{align*}
+g(v) &\doteq \log\left(\frac{\alpha}{1+T}\right) + \max_{b \in [0, 1]} \log K_T(v, \theta, b \vec{1}).
+\end{align*}
+The inner maximization can also be done via Brent's method, root-finding on the gradient
+\begin{align*}
+\frac{\partial}{\partial b} \log K_T(v, \theta, b \vec{1}) &= \frac{1}{v} \sum_{s \leq T} \frac{r_s(\theta) - 1}{1 + b \left( \frac{r_s(\theta)}{v} - 1 \right)}.
+\end{align*}
+On a GPU, vectorization is more important than algorithmic constants, so using a fixed number of (nested) bisections instead of Brent's method is preferred.
+
+\section{Differentiating \cref{eqn:vhat}} \label{app:gradvhat}
+
+The constraint set for \cref{eqn:vhat} is convex (see \cref{app:setinterval}) and not empty (see \cref{app:setnonempty}).
+Clearly $b = 0$ is infeasible due to the wealth constraint.  The remaining Langrangian is
+\begin{align*}
+\mathcal{L}(v, b) &= v - \lambda g(v, b) - \mu (b - 1),
+\end{align*}
+where $g(v, b) = \log((1+T)/\alpha) - \log K_T(v, \theta, b \vec{1})$ is the wealth constraint.  $v$-stationarity implies
+\begin{align*}
+1 &= -\lambda^* \left. \frac{\partial}{\partial v} \log K_T(v, \theta, b \vec{1}) \right|_{v=v^*,b=b^*}.
+\end{align*}
+Via the Envelope Theorem~\parencite{mwg1995},
+\begin{align*}
+\nabla_\theta \hat{v}(\theta) &= \lambda^* \left.\nabla_\theta \log K_T(v, \theta, b \vec{1}) \right|_{\substack{v=\hat{v}(\theta) \\ b = b^*(\hat{v}(\theta), \theta)}},
+\end{align*}
+Let $r_s(\theta) \doteq \log(1 + c \pi(y_s|y_{<s},x;\theta)) > 0$.
+The terms are
+\begin{align*}
+\frac{\partial \log K_T\left(v, \theta, b \vec{1}\right)}{\partial v} &= -\frac{1}{v}  \sum_{s \leq T} \frac{b r_s(\theta)}{v + b \left(r_s(\theta) - v\right)}, \\
+\nabla_\theta \log K_T\left(v, \theta, b \vec{1}\right) &= \sum_{s \leq T} \frac{b}{v + b \left(r_s(\theta) - v\right)} \nabla_\theta r_s(\theta).
+\end{align*}
+which yields
+\begin{align*}
+\nabla_\theta \hat{v}(\theta) &= \hat{v}(\theta) \sum_{s \leq T} \frac{\kappa_s}{\sum_{s' \leq T} r_{s'} \kappa_{s'}} \nabla_\theta r_s(\theta) \\
+\kappa_t &\doteq \frac{b^*(\hat{v}(\theta), \theta)}{\hat{v}(\theta) + b^*(\hat{v}(\theta), \theta) \left(r_t(\theta) - \hat{v}(\theta) \right)} > 0.
+\end{align*}
+Since all rewards are non-zero, $b^* \in (0, 1)$, so $b$-stationarity implies
+\begin{align*}
+\sum_{s \leq T} \frac{r_s / v^* - 1}{1 + b^* (r_s / v^* - 1)} &= 0 \\
+\sum_{s \leq T} r_s \kappa_s &= v^* \sum_{s \leq T} \kappa_s
+\end{align*}
+Therefore
+\begin{align*}
+\nabla_\theta \hat{v}(\theta) &= \sum_{s \leq T} \frac{\kappa_s}{\sum_{s' \leq T} \kappa_{s'}} \nabla_\theta r_s(\theta).
+\end{align*}
+Finally note
+\begin{align*}
+\nabla_\theta r_s(\theta) &= \gamma_s \nabla_\theta \log \pi\left(y_s|y_{<s},x;\theta\right), \\
+\gamma_s &\doteq \frac{c \pi\left(y_s|y_{<s},x;\theta\right)}{1 + c \pi\left(y_s|y_{<s},x;\theta\right)} \in [0, 1].
+\end{align*}
+
+
+\end{document}
+
