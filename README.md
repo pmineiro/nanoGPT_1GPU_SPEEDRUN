@@ -6,7 +6,7 @@ Malbo is a lower bound objective I originally developed for RL mid-training, but
 
 * Malbo reduces token throughput by circa 1-3% during training,
 * but the loss goes down faster per training step,
-* and overall the time to particular training loss is reduced by 5-10%, see [loss_plot.png](loss_plot.png).
+* and overall the time to the target training loss is reduced by 5-10%, see [loss_plot.png](loss_plot.png).
 
 ## Details
 
