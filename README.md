@@ -20,6 +20,15 @@ Malbo is a lower bound objective I originally developed for RL mid-training, but
 | baseline | `main` branch run | 5.344 | 3.438 | 3.281 | [baseline.out](baseline.out) |
 | malbo | `malbo` branch run | 4.812 | 3.297 | 3.234 | [malbo.out](malbo.out) |
 
+### Learning rate tuning
+
+Turns out both malbo and the baseline benefit from tuning the learning rate.  The gap between the two remains.
+
+| What | Notes | Perplexity @ 100 | Perplexity @ 1000 | Perplexity @ 1750 | complete output |
+|--------|------|------|-----|-----|-----|
+| baseline | `env lrfac=0.5 use_malbo=False python train_gpt2_4090_90min_3_25loss.py` | 5.312 | 3.391 | 3.234 | [baseline.lr0p5x.out](baseline.lr0p5x.out) |
+| malbo | `env lrfac=0.75 python train_gpt2_4090_90min_3_25loss.py` | 4.688 | 3.234 | 3.125 | [malbo.lr0p75x.out](malbo.lr0p75x.out) |
+
 Original README.md is below
 --------------------------------
 
