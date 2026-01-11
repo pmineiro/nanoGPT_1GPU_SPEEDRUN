@@ -60,12 +60,12 @@ for label, filename in files.items():
     try:
         x_time, y_loss = parse_experiment_log(filename)
         df = pd.DataFrame({'time': x_time, 'loss': y_loss})
-        plt.plot(df['time'], df['loss'] - min_y_loss, alpha=0.2, label=label)
+        line, = plt.plot(df['time'], df['loss'] - min_y_loss, alpha=0.2)
         smoothed_loss = df['loss'].rolling(window=100, min_periods=1).mean()
-        plt.plot(df['time'], smoothed_loss - min_y_loss, linewidth=2, label=f'{label} smoothed')
+        plt.plot(df['time'], smoothed_loss - min_y_loss, linewidth=2, label=label, color=line.get_color())
 
-        if label == 'Baseline':
-            plt.axhline(smoothed_loss.iloc[-1] - min_y_loss, linestyle='--', linewidth=0.5, alpha=0.6, label=f'{label} final smoothed')
+        if label.startswith('Baseline'):
+            plt.axhline(smoothed_loss.iloc[-1] - min_y_loss, linestyle='--', linewidth=0.5, alpha=0.6, color=line.get_color())
     except FileNotFoundError:
         print(f"File {filename} not found.")
 
