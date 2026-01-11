@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import os
 import pandas as pd
 
 def parse_experiment_log(filename):
@@ -40,11 +41,18 @@ def parse_experiment_log(filename):
                         
     return times, losses
 
-# File paths
-files = {
-    'Malbo': 'malbo.out',
-    'Baseline': 'baseline.out'
-}
+tuned = os.environ.get('tuned', 'False') == 'True'
+
+if tuned:
+    files = {
+        'Malbo (tuned)': 'malbo.lr0p75x.out',
+        'Baseline (tuned)': 'baseline.lr0p5x.out',
+    }
+else:
+    files = {
+        'Malbo': 'malbo.out',
+        'Baseline': 'baseline.out'
+    }
 
 plt.figure(figsize=(10, 6))
 
@@ -83,5 +91,5 @@ plt.grid(True, linestyle='--', alpha=0.7)
 # plt.xscale('log') 
 
 plt.tight_layout()
-plt.savefig('loss_plot.png')
+plt.savefig('loss_plot.tunedlr.png' if tuned else 'loss_plot.png')
 plt.show()
