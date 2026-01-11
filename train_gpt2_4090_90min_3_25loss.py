@@ -21,6 +21,9 @@ torch.backends.cudnn.allow_tf32 = True
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["TORCH_LOGS"] = "+dynamo"
 os.environ["TORCHDYNAMO_VERBOSE"] = "1"
+malbo_eps = float(os.environ.get('malbo_eps', '1e-3'))
+lrfac = float(os.environ.get('lrfac', 1.0))
+use_malbo = os.environ.get('use_malbo', 'True') == 'True'
 
 try:
     from torchao.float8 import convert_to_float8_training
@@ -288,13 +291,16 @@ class GPT(nn.Module):
         logits = 30 * torch.tanh(self.lm_head(norm(x)) / 30)
 
         ce_per_token = F.cross_entropy(logits.view(-1, logits.size(-1)).bfloat16(), target.view(-1), reduction='none').view(logits.size(0), logits.size(1))
-
-        with torch.no_grad():
-            vhat, kappa, gamma = compute_malbo_parameters(logits, target)
-            weights = kappa * gamma
-
         actual_loss = ce_per_token.mean()
-        malbo_loss = (weights * ce_per_token).sum(dim=1).mean()
+
+        if use_malbo:
+            with torch.no_grad():
+                vhat, kappa, gamma = compute_malbo_parameters(logits, target, eps=malbo_eps)
+                weights = kappa * gamma
+
+            malbo_loss = (weights * ce_per_token).sum(dim=1).mean()
+        else:
+            malbo_loss = actual_loss
 
         return actual_loss, malbo_loss # note: report actual_loss, but take backward of malbo_loss
 
@@ -415,11 +421,11 @@ matrix_params = [p for p in param_dict.values() if p.ndim == 2]
 scalar_params = [p for p in param_dict.values() if p.ndim < 2]
 
 # Optimizers
-opt_matrix = Muon(matrix_params, lr=0.05, momentum=0.95)
-opt_scalar = torch.optim.Adam(scalar_params, lr=0.04, betas=(0.8, 0.95), fused=True)
-opt_wte = torch.optim.Adam([model.transformer.wte.weight] + [v.weight for v in model.value_embeds], 
-                           lr=0.6, betas=(0.8, 0.95), fused=True)
-opt_head = torch.optim.Adam([model.lm_head.weight], lr=0.008, betas=(0.8, 0.95), fused=True)
+opt_matrix = Muon(matrix_params, lr=lrfac*0.05, momentum=0.95)
+opt_scalar = torch.optim.Adam(scalar_params, lr=lrfac*0.04, betas=(0.8, 0.95), fused=True)
+opt_wte = torch.optim.Adam([model.transformer.wte.weight] + [v.weight for v in model.value_embeds],
+                           lr=lrfac*0.6, betas=(0.8, 0.95), fused=True)
+opt_head = torch.optim.Adam([model.lm_head.weight], lr=lrfac*0.008, betas=(0.8, 0.95), fused=True)
 optimizers = [opt_wte, opt_head, opt_matrix, opt_scalar]
 
 def get_lr(it):
@@ -437,7 +443,7 @@ x, y = train_loader.next_batch()
 
 t0 = time.time()
 run_id = str(uuid.uuid4())
-print(f"Run ID: {run_id}")
+print(f"Run ID: {run_id} {lrfac=} {malbo_eps=} {use_malbo=}")
 print("Step\tLoss\tTime(ms)\tkt/s\tWindow\tETA(m)\tMalbo Loss")
 
 for step in range(args.num_iterations + 1):
