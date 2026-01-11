@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn.functional as F
 
-@torch.compile
+@torch.compile(fullgraph=True)
 def compute_malbo_parameters(logits, targets, eps=1e-3, alpha=0.05, dtype=torch.float32):
     """
     Computes v_hat, kappa, and gamma using vectorized bisection on the GPU.
