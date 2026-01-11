@@ -22,7 +22,7 @@ Malbo is a lower bound objective I originally developed for RL mid-training, but
 
 ### Learning rate tuning
 
-Turns out both malbo and the baseline benefit from tuning the learning rate.  The gap between the two remains.
+Turns out both malbo and the baseline benefit from tuning the learning rate.  The gap between the two remains: see [loss_plot.tunedlr.png](loss_plot.tunedlr.png).
 
 | What | Notes | Perplexity @ 100 | Perplexity @ 1000 | Perplexity @ 1750 | complete output |
 |--------|------|------|-----|-----|-----|
