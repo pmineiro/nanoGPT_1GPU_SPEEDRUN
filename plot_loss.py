@@ -73,7 +73,7 @@ for label, filename in files.items():
         plt.plot(df['time'], smoothed_loss - min_y_loss, linewidth=2, label=label, color=line.get_color())
 
         if label.startswith('Baseline'):
-            plt.axhline(smoothed_loss.iloc[-1] - min_y_loss, linestyle='--', linewidth=0.5, alpha=0.6, color=line.get_color())
+            plt.axhline(smoothed_loss.iloc[-1] - min_y_loss, linestyle='-', linewidth=2.0, alpha=0.6, color=line.get_color())
     except FileNotFoundError:
         print(f"File {filename} not found.")
 
@@ -83,12 +83,10 @@ ax.yaxis.set_minor_formatter(ticker.FuncFormatter(format_loss))
 
 plt.xlabel('Total Elapsed Time (seconds)')
 plt.ylabel('Loss')
+plt.ylim([3.02 - min_y_loss, 4 - min_y_loss])
 plt.title('Training Loss vs. Total Elapsed Time')
 plt.legend()
 plt.grid(True, linestyle='--', alpha=0.7)
-
-# Optional: Log scale for X-axis if the first step setup time is very large
-# plt.xscale('log') 
 
 plt.tight_layout()
 plt.savefig('loss_plot.tunedlr.png' if tuned else 'loss_plot.png')
