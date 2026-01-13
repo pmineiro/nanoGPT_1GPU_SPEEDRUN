@@ -24,6 +24,8 @@ Malbo is a lower bound objective I originally developed for RL mid-training, but
 
 Turns out both malbo and the baseline benefit from tuning the learning rate.  The gap between the two remains: see [loss_plot.tunedlr.png](loss_plot.tunedlr.png).
 
+Once the learning rates of both are tuned, as expected, malbo &ldquo;wants&rdquo; a larger learning rate, since it is optimizing a robust objective.
+
 | What | Notes | Perplexity @ 100 | Perplexity @ 1000 | Perplexity @ 1750 | complete output |
 |--------|------|------|-----|-----|-----|
 | baseline | `env lrfac=0.5 use_malbo=False python train_gpt2_4090_90min_3_25loss.py` | 5.312 | 3.391 | 3.234 | [baseline.lr0p5x.out](baseline.lr0p5x.out) |
